@@ -76,7 +76,7 @@ client.on('messageCreate', async (message) => {
 });
 
 // Log in to Discord using the bot's token from the .env file
-client.login(process.env.DISCORD_TOKEN);
+client.login(process.env.DISCORD_BOT_TOKEN);
 
 
 const PORT = 3000;
