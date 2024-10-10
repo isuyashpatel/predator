@@ -174,7 +174,7 @@ async function getTopProductHuntProducts() {
         console.error('Error handling Hacker News command:', error.message);
         message.channel.send('There was an error fetching the latest Hacker News stories.');
       }
-    } else if (message.content === '!Product-Hunt') {
+    } else if (message.content === '!producthunt') {
       try {
         const products = await getTopProductHuntProducts();
         if (products.length === 0) {
