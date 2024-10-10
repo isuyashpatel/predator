@@ -39,8 +39,10 @@ async function getLast24HourStories() {
 
 // Function to summarize the stories using OpenAI API
 async function summarizeStories(stories) {
+   
+    
     const formattedStories = stories.map(story => `Title: ${story.title}\nLink: ${story.url}`).join("\n\n");
-
+    console.log(formattedStories);
     try {
         const response = await axios.post(
             openAIAPI,
