@@ -1,3 +1,5 @@
+const express = require('express');
+const app = express();
 const { Client, GatewayIntentBits } = require('discord.js');
 const axios = require('axios');
 require('dotenv').config();
@@ -52,3 +54,11 @@ async function summarizeStories(stories) {
 }
 
 client.login(discordBotToken);
+const PORT = 3000;
+app.get('/', (_req, res) => {
+    res.send('Bot is running');
+});
+
+app.listen(PORT, () => {
+    console.log(`Listening on port ${PORT}`);
+});
