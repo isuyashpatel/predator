@@ -86,7 +86,7 @@ client.on('messageCreate', async (message) => {
 });
 
 // Log in to Discord with your token
-client.login(process.env.DISCORD_TOKEN);
+client.login(process.env.DISCORD_BOT_TOKEN);
 
 const PORT = 3000;
 app.get('/', (_req, res) => {
