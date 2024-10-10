@@ -4,28 +4,29 @@ require('dotenv').config();
 const { Client, GatewayIntentBits } = require('discord.js');
 const axios = require('axios');
 
+// Create a new client instance
 const client = new Client({
     intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
 });
 
+// URL for the Hacker News top stories API
 const hackerNewsAPI = 'https://hacker-news.firebaseio.com/v0/topstories.json';
-const openAIAPI = 'https://api.openai.com/v1/chat/completions';
 
-// Function to get top stories from the last 24 hours
+// Function to fetch stories from Hacker News in the last 24 hours
 async function getLast24HourStories() {
     try {
         const currentTime = Math.floor(Date.now() / 1000); // Current time in UNIX seconds
         const twentyFourHoursAgo = currentTime - 24 * 60 * 60; // 24 hours ago
 
-        // Fetch top stories from Hacker News
+        // Fetch the top stories from Hacker News (top 100 stories)
         const topStories = await axios.get(hackerNewsAPI);
-        const topStoryIds = topStories.data.slice(0, 100); // Get top 100 stories to filter
+        const topStoryIds = topStories.data.slice(0, 100); // Get the top 100 story IDs
 
-        // Fetch details of each story
+        // Fetch the details of each story
         const storyPromises = topStoryIds.map(id => axios.get(`https://hacker-news.firebaseio.com/v0/item/${id}.json`));
         const stories = await Promise.all(storyPromises);
 
-        // Filter stories that were posted within the last 24 hours
+        // Filter the stories that were posted in the last 24 hours
         const recentStories = stories
             .map(story => story.data)
             .filter(story => story && story.time >= twentyFourHoursAgo);
@@ -37,49 +38,36 @@ async function getLast24HourStories() {
     }
 }
 
-// Function to summarize the stories using OpenAI API
-async function summarizeStories(stories) {
-   
-    
-    const formattedStories = stories.map(story => `Title: ${story.title}\nLink: ${story.url}`).join("\n\n");
-    console.log(formattedStories);
-    try {
-        const response = await axios.post(
-            openAIAPI,
-            {
-                model: 'gpt-3.5-turbo',
-                messages: [{ role: 'user', content: `Summarize these stories:\n\n${formattedStories}` }],
-            },
-            {
-                headers: {
-                    Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-                    'Content-Type': 'application/json',
-                },
-            }
-        );
-
-        return response.data.choices[0].message.content;
-    } catch (error) {
-        console.error('Error with OpenAI API:', error.response ? error.response.data : error.message);
-        return "Couldn't summarize the stories.";
-    }
+// Function to format the stories for Discord message
+function formatStoriesForDiscord(stories) {
+    return stories.map(story => {
+        return `**${story.title}**\n${story.url}\n`;
+    }).join("\n");
 }
 
-// Discord bot event listener for messages
+// Event when the bot is ready
+client.once('ready', () => {
+    console.log(`Logged in as ${client.user.tag}!`);
+});
+
+// Event when the bot detects a message
 client.on('messageCreate', async (message) => {
+    // Command to trigger the bot to fetch the latest Hacker News stories
     if (message.content === '!hackernews') {
         try {
-            // Fetch stories from the last 24 hours
+            // Fetch the stories from the last 24 hours
             const recentStories = await getLast24HourStories();
 
+            // If there are no recent stories, notify the user
             if (recentStories.length === 0) {
                 message.channel.send("No stories from the last 24 hours.");
                 return;
             }
 
-            // Summarize the stories using OpenAI API
-            const summary = await summarizeStories(recentStories);
-            message.channel.send(summary);
+            // Format and send the stories to Discord
+            const formattedStories = formatStoriesForDiscord(recentStories);
+            message.channel.send(formattedStories);
+
         } catch (error) {
             console.error('Error handling command:', error.message);
             message.channel.send("There was an error fetching the latest stories.");
@@ -87,8 +75,9 @@ client.on('messageCreate', async (message) => {
     }
 });
 
-// Log in to Discord with your token
-client.login(process.env.DISCORD_BOT_TOKEN);
+// Log in to Discord using the bot's token from the .env file
+client.login(process.env.DISCORD_TOKEN);
+
 
 const PORT = 3000;
 app.get('/', (_req, res) => {
