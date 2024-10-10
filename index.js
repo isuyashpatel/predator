@@ -1,85 +1,110 @@
 const express = require('express');
 const app = express();
 require('dotenv').config();
-const { Client, GatewayIntentBits } = require('discord.js');
+const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
 const axios = require('axios');
+console.log("suyash");
 
-// Create a new client instance
+// Replace with your bot token
+const token = process.env.DISCORD_BOT_TOKEN;
+
+// Initialize Discord client
 const client = new Client({
-    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
+  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
 });
 
-// URL for the Hacker News top stories API
-const hackerNewsAPI = 'https://hacker-news.firebaseio.com/v0/topstories.json';
+// Utility function to split messages into chunks if needed
+function splitMessageIntoChunks(text, maxLength = 2000) {
+  const chunks = [];
+  while (text.length > maxLength) {
+    const chunk = text.substring(0, maxLength);
+    chunks.push(chunk);
+    text = text.substring(maxLength);
+  }
+  if (text.length > 0) {
+    chunks.push(text); // Add remaining text
+  }
+  return chunks;
+}
 
-// Function to fetch stories from Hacker News in the last 24 hours
+// Fetch Hacker News top stories from the last 24 hours
 async function getLast24HourStories() {
-    try {
-        const currentTime = Math.floor(Date.now() / 1000); // Current time in UNIX seconds
-        const twentyFourHoursAgo = currentTime - 24 * 60 * 60; // 24 hours ago
+  try {
+    const currentTime = Math.floor(Date.now() / 1000); // Get current UNIX timestamp
+    const twentyFourHoursAgo = currentTime - 24 * 60 * 60; // Time 24 hours ago
 
-        // Fetch the top stories from Hacker News (top 100 stories)
-        const topStories = await axios.get(hackerNewsAPI);
-        const topStoryIds = topStories.data.slice(0, 100); // Get the top 100 story IDs
+    // Fetch top story IDs from Hacker News
+    const response = await axios.get('https://hacker-news.firebaseio.com/v0/topstories.json');
+    const topStoryIds = response.data.slice(0, 100); // Get top 100 story IDs
 
-        // Fetch the details of each story
-        const storyPromises = topStoryIds.map(id => axios.get(`https://hacker-news.firebaseio.com/v0/item/${id}.json`));
-        const stories = await Promise.all(storyPromises);
+    // Fetch the story details
+    const storyPromises = topStoryIds.map((id) =>
+      axios.get(`https://hacker-news.firebaseio.com/v0/item/${id}.json`)
+    );
+    const stories = await Promise.all(storyPromises);
 
-        // Filter the stories that were posted in the last 24 hours
-        const recentStories = stories
-            .map(story => story.data)
-            .filter(story => story && story.time >= twentyFourHoursAgo);
+    // Filter stories that were posted in the last 24 hours
+    const recentStories = stories
+      .map((story) => story.data)
+      .filter((story) => story && story.time >= twentyFourHoursAgo);
 
-        return recentStories;
-    } catch (error) {
-        console.error('Error fetching stories:', error.message);
-        return [];
-    }
+    return recentStories;
+  } catch (error) {
+    console.error('Error fetching stories:', error.message);
+    return [];
+  }
 }
 
-// Function to format the stories for Discord message
+// Format stories and create Discord-friendly embeds
 function formatStoriesForDiscord(stories) {
-    return stories.map(story => {
-        return `**${story.title}**\n${story.url}\n`;
-    }).join("\n");
+  let formattedStories = stories
+    .map((story) => {
+      return `**${story.title}**\n${story.url}\n`;
+    })
+    .join("\n");
+
+  // Split into chunks if necessary
+  return splitMessageIntoChunks(formattedStories).map((chunk) => {
+    const embed = new EmbedBuilder()
+      .setTitle('Top Hacker News Stories (Last 24 Hours)')
+      .setDescription(chunk)
+      .setColor('#ff6600') // Optional: Change the embed color
+      .setFooter({ text: 'Source: Hacker News' });
+    return embed;
+  });
 }
 
-// Event when the bot is ready
-client.once('ready', () => {
-    console.log(`Logged in as ${client.user.tag}!`);
-});
-
-// Event when the bot detects a message
+// Handle the !hackernews command
 client.on('messageCreate', async (message) => {
-    // Command to trigger the bot to fetch the latest Hacker News stories
-    if (message.content === '!hackernews') {
-        try {
-            // Fetch the stories from the last 24 hours
-            const recentStories = await getLast24HourStories();
+  if (message.content === '!hackernews') {
+    try {
+      // Fetch the stories from the last 24 hours
+      const recentStories = await getLast24HourStories();
 
-            // If there are no recent stories, notify the user
-            if (recentStories.length === 0) {
-                message.channel.send("No stories from the last 24 hours.");
-                return;
-            }
+      // If there are no recent stories, notify the user
+      if (recentStories.length === 0) {
+        message.channel.send('No stories from the last 24 hours.');
+        return;
+      }
 
-            // Format and send the stories to Discord
-            const formattedStories = formatStoriesForDiscord(recentStories);
-            message.channel.send(formattedStories);
+      // Format the stories and create the embeds
+      const embeds = formatStoriesForDiscord(recentStories);
 
-        } catch (error) {
-            console.error('Error handling command:', error.message);
-            message.channel.send("There was an error fetching the latest stories.");
-        }
+      // Send each embed as a separate message
+      for (const embed of embeds) {
+        await message.channel.send({ embeds: [embed] });
+      }
+    } catch (error) {
+      console.error('Error handling command:', error.message);
+      message.channel.send('There was an error fetching the latest stories.');
     }
+  }
 });
 
-// Log in to Discord using the bot's token from the .env file
-client.login(process.env.DISCORD_BOT_TOKEN);
+// Log in to Discord with your bot's token
+client.login(token);
 
-
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 app.get('/', (_req, res) => {
     res.send('Bot is running');
 });
