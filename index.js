@@ -3,11 +3,10 @@ const app = express();
 require('dotenv').config();
 const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
 const axios = require('axios');
-console.log("suyash");
 
 // Replace with your bot token
-const token = process.env.DISCORD_BOT_TOKEN;
-
+const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
+const PRODUCT_HUNT_TOKEN = process.env.PRODUCT_HUNT_TOKEN;
 // Initialize Discord client
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
@@ -101,9 +100,137 @@ client.on('messageCreate', async (message) => {
   }
 });
 
-// Log in to Discord with your bot's token
-client.login(token);
 
+
+// product hunt start
+async function getTopProductHuntProducts() {
+    try {
+      const response = await axios.post(
+        'https://api.producthunt.com/v2/api/graphql',
+        {
+          query: `
+            query {
+              posts(first: 50, order: RANKING) {
+                edges {
+                  node {
+                    name
+                    tagline
+                    website
+                    url
+                  }
+                }
+              }
+            }
+          `
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${PRODUCT_HUNT_TOKEN}`,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+        }
+      );
+  
+      return response.data.data.posts.edges.map(edge => edge.node);
+    } catch (error) {
+      console.error('Error fetching Product Hunt products:', error.response ? error.response.data : error.message);
+      return [];
+    }
+  }
+  
+  // Format Product Hunt products and create Discord-friendly embeds
+  function formatProductsForDiscord(products) {
+    let formattedProducts = products
+      .map((product, index) => {
+        return `${index + 1}. **${product.name}**\n${product.tagline}\nWebsite: ${product.website}\nProduct Hunt: ${product.url}\n`;
+      })
+      .join("\n");
+  
+    return splitMessageIntoChunks(formattedProducts).map((chunk) => {
+      const embed = new EmbedBuilder()
+        .setTitle('Top 50 Product Hunt Products')
+        .setDescription(chunk)
+        .setColor('#da552f')
+        .setFooter({ text: 'Source: Product Hunt' });
+      return embed;
+    });
+  }
+  
+  // Handle commands
+  client.on('messageCreate', async (message) => {
+    if (message.content === '!hackernews') {
+      try {
+        const recentStories = await getLast24HourStories();
+        if (recentStories.length === 0) {
+          message.channel.send('No stories from the last 24 hours.');
+          return;
+        }
+        const embeds = formatStoriesForDiscord(recentStories);
+        for (const embed of embeds) {
+          await message.channel.send({ embeds: [embed] });
+        }
+      } catch (error) {
+        console.error('Error handling Hacker News command:', error.message);
+        message.channel.send('There was an error fetching the latest Hacker News stories.');
+      }
+    } else if (message.content === '!Product-Hunt') {
+      try {
+        const products = await getTopProductHuntProducts();
+        if (products.length === 0) {
+          message.channel.send('No products found on Product Hunt.');
+          return;
+        }
+        const embeds = formatProductsForDiscord(products);
+        for (const embed of embeds) {
+          await message.channel.send({ embeds: [embed] });
+        }
+      } catch (error) {
+        console.error('Error handling Product Hunt command:', error.message);
+        message.channel.send('There was an error fetching the latest Product Hunt products.');
+      }
+    }
+  });
+
+//product hunt end
+
+
+
+// write here example to write discord bot 
+
+// Get current time in a formatted string
+function getCurrentTime() {
+    const now = new Date();
+    return now.toLocaleString('en-US', { 
+      weekday: 'long', 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric', 
+      hour: '2-digit', 
+      minute: '2-digit', 
+      second: '2-digit',
+      timeZoneName: 'short'
+    });
+  }
+  
+  // Handle commands
+  client.on('messageCreate', async (message) => {
+    if (message.content === '!time') {
+      const currentTime = getCurrentTime();
+      const embed = new EmbedBuilder()
+        .setTitle('Current Time')
+        .setDescription(currentTime)
+        .setColor('#0099ff')
+        .setFooter({ text: 'Requested by: ' + message.author.username });
+      message.channel.send({ embeds: [embed] });
+    }
+  });
+  
+// Log in to Discord with your bot's token
+client.login(DISCORD_BOT_TOKEN);
+
+
+//end of  example
 const PORT = process.env.PORT || 3000;
 app.get('/', (_req, res) => {
     res.send('Bot is running');
